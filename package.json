@@ -1,0 +1,1 @@
+{"name":"skripta","private":true,"scripts":{"test":"node test/generate.test.js"}}
