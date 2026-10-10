@@ -198,7 +198,7 @@ $('list').innerHTML=notes.map((n,i)=>`<div class="card" style="margin:8px 0"><sp
 $('show').disabled=!d}
 async function start(idx){$('e4').textContent='';abort=new AbortController();const q=idx.slice();let stop=false;
 const worker=async()=>{while(q.length&&!stop){const n=notes[q.shift()];try{await runOne(sample,n,abort.signal)}catch(e){stop=true;if(e.code==='rate_limited')$('e4').textContent='Rate limit reached. Wait a minute, then retry the failed topics.';if(e.code==='not_granted')$('e4').textContent='Permission was declined. Allow AI access to generate notes.'}}};
-await Promise.all([worker(),worker(),worker()]);if(!notes.some(n=>n.status==='queued'||n.status==='writing')){$('h4').textContent=notes.every(n=>n.status==='done')?'All notes written':'Notes ready (some failed)'}}
+await Promise.all([worker(),worker()]);if(!notes.some(n=>n.status==='queued'||n.status==='writing')){$('h4').textContent=notes.every(n=>n.status==='done')?'All notes written':'Notes ready (some failed)'}}
 $('n3').onclick=()=>{notes=topics.map(t=>({topic:t,status:'queued'}));show(4);$('h4').textContent='Writing your notes';list();start(notes.map((_,i)=>i))};
 $('cancel').onclick=()=>{if(abort)abort.abort()};
 $('show').onclick=()=>{renderNotes();show(5)};

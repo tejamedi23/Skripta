@@ -1,4 +1,4 @@
-// Vercel serverless function. The OpenRouter key never leaves the server.
+// Vercel serverless function. Works with any OpenAI-compatible provider (Groq, OpenRouter, Mistral...). The key never leaves the server.
 const hits = new Map();
 const S = (x, m) => String(x || '').slice(0, m);
 
@@ -27,14 +27,14 @@ function extract(t) {
   return JSON.parse(t.slice(i, j + 1));
 }
 
-async function callModel(prompt, key, model) {
+async function callModel(prompt, key, model, base) {
   const ac = new AbortController();
   const to = setTimeout(() => ac.abort(), 30000);
   try {
-    const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const r = await fetch(base + '/chat/completions', {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json', 'X-Title': 'SKRIPTA' },
-      body: JSON.stringify({ model, max_tokens: 700, temperature: 0.4, messages: [{ role: 'system', content: 'You output only valid JSON.' }, { role: 'user', content: prompt }] }),
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, max_tokens: 1000, temperature: 0.4, messages: [{ role: 'system', content: 'You output only valid JSON.' }, { role: 'user', content: prompt }] }),
       signal: ac.signal,
     });
     if (!r.ok) { const e = new Error('upstream'); e.status = r.status; throw e; }
@@ -46,8 +46,8 @@ async function callModel(prompt, key, model) {
 module.exports = async (req, res) => {
   const send = (c, o) => res.status(c).json(o);
   if (req.method !== 'POST') return send(405, { error: 'Use POST.' });
-  const key = process.env.OPENROUTER_API_KEY, model = process.env.OPENROUTER_MODEL;
-  if (!key || !model) return send(500, { error: 'Server is not configured.' });
+  const key = process.env.LLM_API_KEY, model = process.env.LLM_MODEL, base = (process.env.LLM_BASE_URL || '').replace(/\/+$/, '');
+  if (!key || !model || !base) return send(500, { error: 'Server is not configured.' });
   let b = req.body;
   try { if (typeof b === 'string') b = JSON.parse(b); } catch { return send(400, { error: 'Bad request.' }); }
   b = b || {};
@@ -61,7 +61,7 @@ module.exports = async (req, res) => {
   const prompt = buildPrompt({ topic, level: S(b.level, 80), exam: S(b.exam, 80), time: b.time, flow: b.flow, extra: S(b.extra, 200) });
   for (let a = 0; a < 2; a++) {
     try {
-      const o = extract(await callModel(prompt, key, model));
+      const o = extract(await callModel(prompt, key, model, base));
       if (o && o.error) return send(422, { error: 'This topic could not be turned into notes.' });
       return send(200, { note: clean(o) });
     } catch (e) {
