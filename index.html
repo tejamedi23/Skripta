@@ -124,6 +124,8 @@ button,select,textarea,input{transition:border-color .15s,box-shadow .15s,transf
 <select id="q4"><option value="1" selected>Yes, wherever a process exists</option><option value="0">No, text only</option></select>
 <label for="q5">Anything else? (optional)</label>
 <input type="text" id="q5" maxlength="200" placeholder="e.g. we use Silberschatz; marks are 5 per topic">
+<label for="q6">Pages per topic</label>
+<select id="q6"><option value="1" selected>1 page (concise notes)</option><option value="2">2 pages</option><option value="3">3 pages</option><option value="4">4 pages</option><option value="5">5 pages</option></select>
 <div class="row" style="margin-top:18px"><button id="b2">Back</button><button class="p" id="n2">Continue</button></div>
 </section>
 
@@ -145,7 +147,8 @@ button,select,textarea,input{transition:border-color .15s,box-shadow .15s,transf
 </section>
 
 <section id="s5" hidden>
-<div class="row noprint"><h2 style="margin-right:auto">Your notes</h2><button id="sty">Change style</button><button id="print" class="p">Print / Save as PDF</button></div>
+<div class="row noprint"><h2 style="margin-right:auto">Your notes</h2><button id="sty">Change style</button><button id="download" class="p">Download PDF</button><button id="print">Print / Save as PDF</button></div>
+<p class="mut noprint" id="pdfStatus" role="status" aria-live="polite"></p>
 <p class="mut noprint" id="note5">Style changes re-draw the same notes instantly; Regenerate re-writes one page only.</p>
 <div id="notes"></div>
 </section>
@@ -178,7 +181,7 @@ group('papers',['ruled','grid','plain'],'paper',(b,v)=>{b.textContent=v});sync()
 function pgStyle(){return `--ink:${INKS[ST.ink]};--fs:${FONTS[ST.font]}px;font-family:'${ST.font}',cursive`}
 function drawPrev(){const r=rng(ST.seed);const p=$('prev');p.className='pg '+ST.paper;p.style.cssText=pgStyle()+';min-height:0;padding-bottom:40px;box-shadow:none';p.innerHTML=`<div class="t">${words('Deadlocks',r)}</div><div>${words('Processes wait forever for resources held by each other.',r)}</div>`}
 function mark(r){const a=J(r,1.2),b=J(r,1.2);return `<svg class="bm" viewBox="0 0 14 14"><path d="M3 ${7+a} Q4 ${2+b} 8 3 Q13 4 11 ${9+a} Q8 13 4 ${11+b} Q1 9 3 ${7+a}Z"/></svg>`}
-function pageHTML(n,i){const r=rng(ST.seed+i*997),o=n.note;let h='';
+function pageHTML(n,i,o=n.note,pageIndex=0){const r=rng(ST.seed+i*997+pageIndex*7919);let h='';
 h+=`<div class="t">${words(o.title,r)}<svg class="ul" viewBox="0 0 300 12" preserveAspectRatio="none"><path d="M2 ${6+J(r,2)} Q75 ${6+J(r,4)} 150 ${5+J(r,2)} T298 ${6+J(r,3)}"/></svg></div><div>${words(o.definition,r)}</div>`;
 o.key_points.forEach(k=>{h+=`<div class="bl">${mark(r)}${words(k,r)}</div>`});
 if(o.flow&&o.flow.steps.length)h+=`<div style="margin-top:6px">${words(o.flow.title||'Flow',r)}:</div><div class="flow" role="img" aria-label="Flowchart: ${esc(o.flow.steps.map(s=>s.label).join(', then '))}">`+o.flow.steps.map((s,k)=>`${k?'<span class="ar">→</span>':''}<span class="fb ${s.type==='decision'?'d':''}">${words(s.label,r)}</span>`).join('')+`</div>`;
@@ -186,23 +189,28 @@ if(o.example)h+=`<div class="box" style="margin-top:6px">${words('Example: '+o.e
 if(o.formula)h+=`<div class="box f" style="margin-top:6px">${words('Formula: '+o.formula,r)}</div>`;
 if(o.memory_tip)h+=`<div>★ ${words(o.memory_tip,r)}</div>`;
 return h}
-function renderNotes(){const ok=notes.filter(n=>n.status==='done');$('notes').innerHTML=ok.length?ok.map((n,k)=>{const i=notes.indexOf(n);return `<div class="pw"><div class="pgbar noprint"><span>Page ${k+1} of ${ok.length}</span><span class="row"><button data-a="re" data-i="${i}">Regenerate</button><button data-a="del" data-i="${i}">Delete</button></span></div><div class="pg ${ST.paper}" style="${pgStyle()}">${pageHTML(n,i)}<div class="ft">AI-generated. Verify with your textbook.</div><div class="pn">${k+1}</div></div></div>`}).join(''):'<p class="mut">No pages yet.</p>'}
+function renderNotes(){const ok=notes.filter(n=>n.status==='done'),total=ok.reduce((sum,n)=>sum+(n.note.pages||[n.note]).length,0);let pageNumber=0;$('notes').innerHTML=ok.length?ok.map(n=>{const i=notes.indexOf(n),pages=n.note.pages||[n.note];return pages.map((page,pageIndex)=>{pageNumber++;return `<div class="pw"><div class="pgbar noprint"><span>Page ${pageNumber} of ${total}${pages.length>1?` · ${esc(n.topic)} (${pageIndex+1}/${pages.length})`:''}</span>${pageIndex===0?`<span class="row"><button data-a="re" data-i="${i}">Regenerate</button><button data-a="del" data-i="${i}">Delete</button></span>`:''}</div><div class="pg ${ST.paper}" style="${pgStyle()}">${pageHTML(n,i,page,pageIndex)}<div class="ft">AI-generated. Verify with your textbook.</div><div class="pn">${pageNumber}</div></div></div>`}).join('')}).join(''):'<p class="mut">No pages yet.</p>'}
 const S=(x,m)=>String(x||'').slice(0,m);
 function clean(o){if(!o||o.error||!Array.isArray(o.key_points)||!o.title||!o.definition)throw new Error('bad');const f=o.flow&&Array.isArray(o.flow.steps)?{title:S(o.flow.title,40),steps:o.flow.steps.slice(0,7).map(s=>({label:S(s.label,40),type:s.type==='decision'?'decision':'step'}))}:null;
 return{title:S(o.title,60),definition:S(o.definition,300),key_points:o.key_points.slice(0,6).map(k=>S(k,160)),example:o.example?S(o.example,220):null,formula:o.formula?S(o.formula,120):null,memory_tip:o.memory_tip?S(o.memory_tip,100):null,flow:f}}
-async function api(topic,sig){let r;try{r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,level:$('q1').value,exam:$('q3').value,time:$('q2').value,flow:$('q4').value,extra:$('q5').value}),signal:sig})}catch(e){const x=new Error('net');x.code=e.name==='AbortError'?'cancelled':'failed';throw x}
-if(!r.ok){const x=new Error('api');x.code=r.status===429?'rate_limited':'failed';throw x}return (await r.json()).note}
-async function runOne(sample,n,sig){n.status='writing';list();try{for(let a=0;a<2;a++){try{n.note=await api(n.topic,sig);n.status='done';break}catch(e){if(e&&e.code==='cancelled')throw e;if(e&&(e.code==='rate_limited'||e.code==='not_granted'))throw e;if(a)throw e}}}catch(e){n.status=e&&e.code==='cancelled'?'queued':'failed';n.code=e&&e.code}list()}
+async function api(topic,sig,pageCount){let r;try{r=await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({topic,level:$('q1').value,exam:$('q3').value,time:$('q2').value,flow:$('q4').value,extra:$('q5').value,pageCount}),signal:sig})}catch(e){const x=new Error(e.name==='AbortError'?'Generation cancelled.':'Could not reach the server. Check your connection and try again.');x.code=e.name==='AbortError'?'cancelled':'failed';throw x}
+let data;try{data=await r.json()}catch{data={}}if(!r.ok){const x=new Error(data.error||`Generation failed (HTTP ${r.status}).`);x.code=r.status===429?'rate_limited':'failed';throw x}return data.note}
+async function runOne(n,sig){n.status='writing';list();try{for(let a=0;a<2;a++){try{n.note=await api(n.topic,sig,n.pageCount||1);n.status='done';break}catch(e){if(e&&e.code==='cancelled')throw e;if(e&&(e.code==='rate_limited'||e.code==='not_granted'))throw e;if(a)throw e}}}catch(e){n.status=e&&e.code==='cancelled'?'queued':'failed';n.code=e&&e.code;if(n.status==='failed')$('e4').textContent=e.message||'Generation failed. Check your server configuration and try again.'}list()}
 function list(){const d=notes.filter(n=>n.status==='done').length,f=notes.filter(n=>n.status==='failed').length;$('bar').textContent=`${d} / ${notes.length} topics completed`+(f?` · ${f} failed`:'');
 $('list').innerHTML=notes.map((n,i)=>`<div class="card" style="margin:8px 0"><span class="chip ${n.status}">${{queued:'Queued',writing:'Writing…',done:'Done ✓',failed:'Failed ✕'}[n.status]}</span>${esc(n.topic)}${n.status==='failed'?` <button data-a="retry" data-i="${i}">Retry</button>`:''}</div>`).join('');
 $('show').disabled=!d}
 async function start(idx){$('e4').textContent='';abort=new AbortController();const q=idx.slice();let stop=false;
-const worker=async()=>{while(q.length&&!stop){const n=notes[q.shift()];try{await runOne(sample,n,abort.signal)}catch(e){stop=true;if(e.code==='rate_limited')$('e4').textContent='Rate limit reached. Wait a minute, then retry the failed topics.';if(e.code==='not_granted')$('e4').textContent='Permission was declined. Allow AI access to generate notes.'}}};
+const worker=async()=>{while(q.length&&!stop){const n=notes[q.shift()];try{await runOne(n,abort.signal)}catch(e){stop=true;if(e.code==='rate_limited')$('e4').textContent='Rate limit reached. Wait a minute, then retry the failed topics.';if(e.code==='not_granted')$('e4').textContent='Permission was declined. Allow AI access to generate notes.'}}};
 await Promise.all([worker(),worker()]);if(!notes.some(n=>n.status==='queued'||n.status==='writing')){$('h4').textContent=notes.every(n=>n.status==='done')?'All notes written':'Notes ready (some failed)'}}
-$('n3').onclick=()=>{notes=topics.map(t=>({topic:t,status:'queued'}));show(4);$('h4').textContent='Writing your notes';list();start(notes.map((_,i)=>i))};
+$('n3').onclick=()=>{const pageCount=Number($('q6').value);notes=topics.map(t=>({topic:t,status:'queued',pageCount}));show(4);$('h4').textContent=`Writing your notes (${pageCount} page${pageCount===1?'':'s'} per topic)`;list();start(notes.map((_,i)=>i))};
 $('cancel').onclick=()=>{if(abort)abort.abort()};
 $('show').onclick=()=>{renderNotes();show(5)};
-$('sty').onclick=()=>show(3);$('print').onclick=()=>window.print();
+function loadPdfScript(src,ready){return new Promise((resolve,reject)=>{if(ready())return resolve();const s=document.createElement('script');const timer=setTimeout(()=>{s.remove();reject(new Error('Timed out loading PDF tools. Check your internet connection.'))},20000);s.onload=()=>{clearTimeout(timer);if(ready())resolve();else reject(new Error('PDF tools could not be initialized.'))};s.onerror=()=>{clearTimeout(timer);s.remove();reject(new Error('Could not load PDF tools. Check your internet connection.'))};s.src=src;document.head.appendChild(s)})}
+async function downloadPdf(){const button=$('download'),status=$('pdfStatus'),pages=[...document.querySelectorAll('#notes .pg')];if(!pages.length){status.textContent='Generate at least one notes page before downloading.';return}button.disabled=true;button.setAttribute('aria-busy','true');status.textContent='Preparing your PDF...';let stage;
+try{await loadPdfScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js',()=>typeof window.html2canvas==='function');await loadPdfScript('https://cdn.jsdelivr.net/npm/jspdf@3.0.2/dist/jspdf.umd.min.js',()=>!!(window.jspdf&&window.jspdf.jsPDF));if(document.fonts&&document.fonts.ready)await document.fonts.ready;const jsPDF=window.jspdf.jsPDF,pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});stage=document.createElement('div');stage.style.cssText='position:fixed;left:-800px;top:0;width:720px;z-index:-1;background:#fff;pointer-events:none';const copies=pages.map(page=>{const copy=page.cloneNode(true);copy.style.width='720px';copy.style.minHeight='1018px';copy.style.height='auto';stage.appendChild(copy);return copy});document.body.appendChild(stage);const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight(),margin=8;
+for(let i=0;i<copies.length;i++){const canvas=await window.html2canvas(copies[i],{backgroundColor:'#ffffff',scale:2,useCORS:true,logging:false});if(!canvas.width||!canvas.height)throw new Error('A notes page could not be rendered.');if(i)pdf.addPage();const ratio=Math.min((pw-2*margin)/canvas.width,(ph-2*margin)/canvas.height),w=canvas.width*ratio,h=canvas.height*ratio;pdf.addImage(canvas.toDataURL('image/jpeg',0.92),'JPEG',(pw-w)/2,(ph-h)/2,w,h,undefined,'FAST')}
+const filename=`Skripta-Notes-${new Date().toISOString().slice(0,10)}.pdf`;pdf.save(filename);status.textContent=`Downloaded ${copies.length} page${copies.length===1?'':'s'} as ${filename}.`}catch(e){status.textContent=`PDF download failed: ${e.message} Use "Print / Save as PDF" instead.`}finally{if(stage)stage.remove();button.disabled=false;button.removeAttribute('aria-busy')}}
+$('sty').onclick=()=>show(3);$('download').onclick=downloadPdf;$('print').onclick=()=>window.print();
 document.addEventListener('click',async e=>{const b=e.target.closest('[data-a]');if(!b)return;const i=+b.dataset.i,a=b.dataset.a;
 if(a==='retry'){notes[i].status='queued';list();await start([i])}
 if(a==='re'){notes[i].status='queued';await start([i]);renderNotes()}
